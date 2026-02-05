@@ -19,9 +19,11 @@ from cashfree_pg.api_client import APIClient
 from cashfree_pg.api.payments_api import PaymentsApi
 from cashfree_pg.models.create_payment_link_request import CreatePaymentLinkRequest
 from cashfree_pg.models.customer_details import CustomerDetails
+from dotenv import load_dotenv
 
+load_dotenv()  # Add this at the top
 # ================= CONFIG =================
-BOT_TOKEN = "7826896426:AAEirZuz8SYakBLKKCUUCNEOZvVX5oaFL4o"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 SUPER_ADMIN_ID = 5798029484  # The bot owner who can add/remove other admins
 API_ENDPOINT = "https://wadownloader.amitdas.site/api/?url="
 
@@ -30,8 +32,9 @@ REFERRAL_BONUS = 2
 COOLDOWN_SECONDS = 20
 
 # Cashfree Payment Config
-CASHFREE_APP_ID = "TEST109477892f0e5a9f7bb17d4eea4d98774901"
-CASHFREE_SECRET_KEY = "cfsk_ma_test_03fdb41cbaa047ecc8596e135afd82b4_585dd4af"
+
+CASHFREE_APP_ID = os.getenv("CASHFREE_APP_ID")
+CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY")
 # This should be a publicly accessible URL. For local testing, you can use ngrok.
 WEBHOOK_URL = f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'localhost')}/cashfree_webhook"
 RETURN_URL = "https://t.me/YourBotUsername"  # Replace with your actual bot username

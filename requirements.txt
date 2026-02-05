@@ -4,3 +4,4 @@ qrcode
 Pillow
 cashfree-pg
 flask
+python-dotenv
