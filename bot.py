@@ -1,3 +1,4 @@
+import os
 import telebot
 import requests
 import time
@@ -13,6 +14,11 @@ from urllib.parse import quote_plus
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime, timezone, timedelta
 from functools import wraps
+from flask import Flask, request, jsonify
+from cashfree_pg.api_client import APIClient
+from cashfree_pg.api.payments_api import PaymentsApi
+from cashfree_pg.models.create_payment_link_request import CreatePaymentLinkRequest
+from cashfree_pg.models.customer_details import CustomerDetails
 
 # ================= CONFIG =================
 BOT_TOKEN = "7826896426:AAEirZuz8SYakBLKKCUUCNEOZvVX5oaFL4o"
@@ -23,9 +29,13 @@ DAILY_FREE_CREDITS = 5
 REFERRAL_BONUS = 2
 COOLDOWN_SECONDS = 20
 
-# UPI Payment Config
-UPI_ID = "m2h@ptaxis"
-UPI_NAME = "SMedia Downloader"
+# Cashfree Payment Config
+CASHFREE_APP_ID = "TEST109477892f0e5a9f7bb17d4eea4d98774901"
+CASHFREE_SECRET_KEY = "cfsk_ma_test_03fdb41cbaa047ecc8596e135afd82b4_585dd4af"
+# This should be a publicly accessible URL. For local testing, you can use ngrok.
+WEBHOOK_URL = f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'localhost')}/cashfree_webhook"
+RETURN_URL = "https://t.me/YourBotUsername"  # Replace with your actual bot username
+# RETURN_URL = f"https://t.me/{bot.get_me().username}" 
 
 # Credit Plans
 CREDIT_PLANS = {
@@ -47,6 +57,14 @@ AUTO_DELETE_DELAY = 300  # 5 minutes
 
 # ================= BOT =================
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
+
+# Cashfree client
+cashfree_client = APIClient(
+    app_id=CASHFREE_APP_ID,
+    secret_key=CASHFREE_SECRET_KEY,
+    environment="sandbox" if "TEST" in CASHFREE_APP_ID else "production"
+)
+payments_api = PaymentsApi(cashfree_client)
 
 # Try to remove webhook with error handling
 try:
@@ -631,25 +649,7 @@ def delete_banned_url(url_id):
         c.execute("DELETE FROM banned_urls WHERE id = ?", (url_id,))
         db.commit()
 
-# ================= QR CODE GENERATOR =================
-def generate_upi_qr(amount, note="Credit Purchase"):
-    """Generate UPI QR code for payment"""
-    upi_url = f"upi://pay?pa={UPI_ID}&pn={quote_plus(UPI_NAME)}&am={amount}&cu=INR&tn={quote_plus(note)}"
-    
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_H,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(upi_url)
-    qr.make(fit=True)
-    
-    img = qr.make_image(fill_color="black", back_color="white")
-    img_io = io.BytesIO()
-    img.save(img_io, 'PNG')
-    img_io.seek(0)
-    return img_io
+
 
 # ================= ADMIN CHECK =================
 def is_admin(uid):
@@ -2226,41 +2226,71 @@ def callback_handler(call):
             
             if plan:
                 payment_id = create_payment(uid, plan_id, plan["price"], plan["credits"])
-                qr = generate_upi_qr(plan["price"], f"Credit Purchase #{payment_id}")
+                
+                try:
+                    link_request = CreatePaymentLinkRequest(
+                        link_id=str(payment_id),
+                        link_amount=plan["price"],
+                        link_currency="INR",
+                        link_purpose=f"{plan['credits']} Credits Purchase",
+                        customer_details=CustomerDetails(customer_id=str(uid)),
+                        link_meta={"payment_id": payment_id},
+                        link_notify={"send_sms": False, "send_email": False},
+                        return_url=RETURN_URL
+                    )
+                    
+                    response = payments_api.create_payment_link(x_api_version="2022-09-01", create_payment_link_request=link_request)
+                    
+                    text = (
+                        f"💰 <b>{plan['name']} Plan</b>\n\n"
+                        f"📊 Credits: <b>{plan['credits']}</b>\n"
+                        f"💵 Price: <b>₹{plan['price']}</b>\n\n"
+                        f"Click the button below to complete the payment."
+                    )
+                    
+                    kb = InlineKeyboardMarkup()
+                    kb.add(InlineKeyboardButton("Click here to Pay", url=response.link_url))
+                    kb.add(InlineKeyboardButton("🔙 Back", callback_data="buy_credits"))
+                    
+                    bot.send_message(call.message.chat.id, text, reply_markup=kb)
+                
+                except Exception as e:
+                    print(f"Cashfree error: {e}")
+                    bot.send_message(call.message.chat.id, "❌ Could not create payment link. Please try again later.")
+
+        elif data == "buy_premium":
+            payment_id = create_payment(uid, "premium", PREMIUM_PRICE, 0)
+            
+            try:
+                link_request = CreatePaymentLinkRequest(
+                    link_id=str(payment_id),
+                    link_amount=PREMIUM_PRICE,
+                    link_currency="INR",
+                    link_purpose="Premium Membership",
+                    customer_details=CustomerDetails(customer_id=str(uid)),
+                    link_meta={"payment_id": payment_id},
+                    link_notify={"send_sms": False, "send_email": False},
+                    return_url=RETURN_URL
+                )
+                
+                response = payments_api.create_payment_link(x_api_version="2022-09-01", create_payment_link_request=link_request)
                 
                 text = (
-                    f"💰 <b>{plan['name']} Plan</b>\n\n"
-                    f"📊 Credits: <b>{plan['credits']}</b>\n"
-                    f"💵 Price: <b>₹{plan['price']}</b>\n\n"
-                    f"📱 <b>Scan QR or use UPI ID:</b>\n"
-                    f"<code>{UPI_ID}</code>\n\n"
-                    f"🆔 <b>Payment ID:</b> <code>{payment_id}</code>\n\n"
-                    "✅ After payment, click 'I've Paid' and enter your UTR number"
+                    f"💎 <b>Premium Membership</b>\n\n"
+                    f"📅 Duration: <b>{PREMIUM_DURATION_DAYS} days</b>\n"
+                    f"💵 Price: <b>₹{PREMIUM_PRICE}</b>\n\n"
+                    f"Click the button below to complete the payment."
                 )
                 
                 kb = InlineKeyboardMarkup()
-                kb.add(InlineKeyboardButton("✅ I've Paid", callback_data=f"paid_{payment_id}"))
-                kb.add(InlineKeyboardButton("🔙 Back", callback_data="buy_credits"))
+                kb.add(InlineKeyboardButton("Click here to Pay", url=response.link_url))
+                kb.add(InlineKeyboardButton("🔙 Back", callback_data="main_menu"))
                 
-                bot.send_photo(call.message.chat.id, qr, caption=text, reply_markup=kb)
-        
-        elif data == "buy_premium":
-            payment_id = create_payment(uid, "premium", PREMIUM_PRICE, 0)
-            qr = generate_upi_qr(PREMIUM_PRICE, f"Premium #{payment_id}")
+                bot.send_message(call.message.chat.id, text, reply_markup=kb)
             
-            text = (
-                f"💎 <b>Premium Membership</b>\n\n"
-                f"📅 Duration: <b>{PREMIUM_DURATION_DAYS} days</b>\n"
-                f"💵 Price: <b>₹{PREMIUM_PRICE}</b>\n\n"
-                f"📱 <b>Scan QR or use UPI ID:</b>\n"
-                f"<code>{UPI_ID}</code>\n\n"
-                f"🆔 <b>Payment ID:</b> <code>{payment_id}</code>\n\n"
-                "✅ After payment, click 'I've Paid' and enter your UTR number"
-            )
-            
-            kb = InlineKeyboardMarkup()
-            kb.add(InlineKeyboardButton("✅ I've Paid", callback_data=f"paid_premium_{payment_id}"))
-            kb.add(InlineKeyboardButton("🔙 Back", callback_data="main_menu"))
+            except Exception as e:
+                print(f"Cashfree error: {e}")
+                bot.send_message(call.message.chat.id, "❌ Could not create payment link. Please try again later.")
             
             bot.send_photo(call.message.chat.id, qr, caption=text, reply_markup=kb)
         
@@ -3148,33 +3178,41 @@ def downloader(message):
             "We're constantly adding new platforms! 🚀",
             reply_markup=kb)
 
-# ================= ERROR HANDLER =================
-def send_error_to_admin(error, user_id, context=""):
-    """Send error to admin"""
-    try:
-        text = (
-            f"⚠️ <b>Error Report</b>\n\n"
-            f"❌ Error: <code>{str(error)[:200]}</code>\n"
-            f"👤 User: <code>{user_id}</code>\n"
-            f"📝 Context: <code>{context[:100]}</code>"
-        )
-        bot.send_message(ADMIN_ID, text)
-    except:
-        pass
+# ================= WEBHOOK =================
+app = Flask(__name__)
 
-@bot.message_handler(func=lambda m: True)
-def unknown_message(message):
-    """Handle unknown messages"""
-    if message.text and message.text.startswith('/'):
-        bot.reply_to(message, "❓ <b>Unknown command!</b>\n\nUse /help to see available commands.")
-    else:
-        bot.reply_to(message, "🤔 <b>I didn't understand!</b>\n\nSend me a video link to download, or use /help for commands.")
+@app.route('/cashfree_webhook', methods=['POST'])
+def cashfree_webhook():
+    """Webhook for Cashfree to send payment status"""
+    try:
+        data = request.json
+        print("Received Cashfree webhook:")
+        print(json.dumps(data, indent=4))
+        
+        # TODO: Add signature verification
+        # TODO: Process the payment confirmation
+        
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        print(f"Error in webhook: {e}")
+        return jsonify({'status': 'error'}), 400
+
+def run_webhook_server():
+    """Run the Flask app in a separate thread"""
+    # Note: For production, use a proper WSGI server like Gunicorn or uWSGI
+    # app.run(host='0.0.0.0', port=8080)
+    # NEW:
+port = int(os.getenv('PORT', 8080))
+app.run(host='0.0.0.0', port=port)
 
 # ================= RUN =================
 if __name__ == "__main__":
+    # Start the webhook server in a background thread
+    webhook_thread = threading.Thread(target=run_webhook_server)
+    webhook_thread.daemon = True
+    webhook_thread.start()
     print("🚀 Bot started successfully!")
     print(f"📊 Admin ID: {ADMIN_ID}")
-    print(f"💳 UPI ID: {UPI_ID}")
     print(f"🎁 Daily Credits: {DAILY_FREE_CREDITS}")
     print(f"👥 Referral Bonus: {REFERRAL_BONUS}")
     print(f"💎 Premium: ₹{PREMIUM_PRICE} for {PREMIUM_DURATION_DAYS} days")
