@@ -9,6 +9,8 @@ import json
 import random
 import string
 import re
+import platform
+import psutil
 from urllib.parse import quote_plus
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime, timezone, timedelta
@@ -920,7 +922,12 @@ def help_cmd(message):
             "/closeticket - Close a ticket\n"
             "/banurl - Ban URL pattern\n"
             "/maintenance - Toggle maintenance mode\n"
-            "/export - Export user data"
+            "/export - Export user data\n\n"
+            "<b>🔧 Admin Test Commands:</b>\n"
+            "/ping - Bot ping test\n"
+            "/sysinfo - System information\n"
+            "/serverinfo - Server/Bot information\n"
+            "/responsetest - Run bot response tests"
         )
         bot.send_message(message.chat.id, user_text + admin_text, parse_mode="HTML")
     else:
@@ -1462,7 +1469,7 @@ def admin_cmd(message):
     )
     bot.send_message(message.chat.id, text, reply_markup=admin_keyboard(uid))
 
-@bot.message_handler(commands=["broadcast"])
+@bot.message_handler(commands=["broadcast", "broadcasts"])
 def broadcast_cmd(message):
     """Broadcast command"""
     uid = message.from_user.id
@@ -1506,7 +1513,7 @@ def broadcast_cmd(message):
         f"📢 <b>Broadcast Complete!</b>\n\n✅ Sent: <b>{sent}</b>\n❌ Failed: <b>{failed}</b>",
         status_msg.chat.id, status_msg.message_id)
 
-@bot.message_handler(commands=["addcredits"])
+@bot.message_handler(commands=["addcredits", "addcredit"])
 def addcredits_cmd(message):
     """Add credits command"""
     uid = message.from_user.id
@@ -1569,7 +1576,7 @@ def removecredits_cmd(message):
     
     bot.reply_to(message, f"✅ Removed <b>{amount} credits</b> from user <b>{target_uid}</b>")
 
-@bot.message_handler(commands=["warn"])
+@bot.message_handler(commands=["warn", "warning"])
 def warn_cmd(message):
     """Warn user command"""
     uid = message.from_user.id
@@ -2080,7 +2087,197 @@ def admins_cmd(message):
     bot.send_message(message.chat.id, text, reply_markup=kb)
 
 
+# ================= NEW ADMIN TEST COMMANDS =================
+@bot.message_handler(commands=["ping"])
+def ping_cmd(message):
+    """Bot ping test - Admin only"""
+    uid = message.from_user.id
+    if not is_admin(uid):
+        bot.reply_to(message, "❌ <b>Unauthorized!</b>")
+        return
+    
+    start_time = time.time()
+    # Send a test message to measure response time
+    test_msg = bot.reply_to(message, "🏓 <b>Pinging...</b>")
+    end_time = time.time()
+    
+    response_time = (end_time - start_time) * 1000  # Convert to ms
+    
+    bot.edit_message_text(
+        f"🏓 <b>Pong!</b>\n\n"
+        f"⚡ Response Time: <code>{response_time:.2f} ms</code>\n"
+        f"🤖 Bot Status: <b>✅ Online</b>\n"
+        f"⏰ Server Time: <code>{now()}</code>",
+        message.chat.id,
+        test_msg.message_id
+    )
+
+@bot.message_handler(commands=["sysinfo"])
+def sysinfo_cmd(message):
+    """System info - Admin only"""
+    uid = message.from_user.id
+    if not is_admin(uid):
+        bot.reply_to(message, "❌ <b>Unauthorized!</b>")
+        return
+    
+    try:
+        # Get system information
+        cpu_percent = psutil.cpu_percent(interval=1)
+        cpu_count = psutil.cpu_count()
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        text = (
+            f"🖥️ <b>System Information</b>\n\n"
+            f"<b>🔧 Platform:</b>\n"
+            f"  • System: <code>{platform.system()}</code>\n"
+            f"  • Release: <code>{platform.release()}</code>\n"
+            f"  • Machine: <code>{platform.machine()}</code>\n"
+            f"  • Processor: <code>{platform.processor()}</code>\n\n"
+            f"<b>⚡ CPU:</b>\n"
+            f"  • Cores: <code>{cpu_count}</code>\n"
+            f"  • Usage: <code>{cpu_percent}%</code>\n\n"
+            f"<b>💾 Memory:</b>\n"
+            f"  • Total: <code>{memory.total // (1024**3)} GB</code>\n"
+            f"  • Available: <code>{memory.available // (1024**3)} GB</code>\n"
+            f"  • Used: <code>{memory.percent}%</code>\n\n"
+            f"<b>💿 Disk:</b>\n"
+            f"  • Total: <code>{disk.total // (1024**3)} GB</code>\n"
+            f"  • Used: <code>{disk.used // (1024**3)} GB</code>\n"
+            f"  • Free: <code>{disk.free // (1024**3)} GB</code>\n"
+            f"  • Usage: <code>{disk.percent}%</code>\n\n"
+            f"<b>⏰ Uptime:</b>\n"
+            f"  • Boot Time: <code>{datetime.fromtimestamp(psutil.boot_time()).strftime('%Y-%m-%d %H:%M:%S')}</code>"
+        )
+    except Exception as e:
+        text = f"❌ <b>Error getting system info:</b>\n<code>{str(e)}</code>"
+    
+    bot.send_message(message.chat.id, text)
+
+@bot.message_handler(commands=["serverinfo"])
+def serverinfo_cmd(message):
+    """Server/Bot info - Admin only"""
+    uid = message.from_user.id
+    if not is_admin(uid):
+        bot.reply_to(message, "❌ <b>Unauthorized!</b>")
+        return
+    
+    # Get bot stats
+    stats = get_stats()
+    total_users = get_all_users_count()
+    active_today = get_active_users_today()
+    banned = get_banned_users_count()
+    premium = get_premium_users_count()
+    admin_count = get_admin_count()
+    
+    # Get database size
+    try:
+        import os
+        db_size = os.path.getsize("users.db") / (1024 * 1024)  # MB
+    except:
+        db_size = 0
+    
+    text = (
+        f"🤖 <b>Bot Server Information</b>\n\n"
+        f"<b>📊 Bot Statistics:</b>\n"
+        f"  • Total Users: <code>{total_users}</code>\n"
+        f"  • Premium Users: <code>{premium}</code>\n"
+        f"  • Active Today: <code>{active_today}</code>\n"
+        f"  • Banned Users: <code>{banned}</code>\n"
+        f"  • Total Admins: <code>{admin_count}</code>\n"
+        f"  • Total Downloads: <code>{stats[1]}</code>\n"
+        f"  • Credits Purchased: <code>{stats[2]}</code>\n"
+        f"  • Total Referrals: <code>{stats[3]}</code>\n\n"
+        f"<b>💾 Database:</b>\n"
+        f"  • Size: <code>{db_size:.2f} MB</code>\n\n"
+        f"<b>🔧 Configuration:</b>\n"
+        f"  • Daily Free Credits: <code>{DAILY_FREE_CREDITS}</code>\n"
+        f"  • Referral Bonus: <code>{REFERRAL_BONUS}</code>\n"
+        f"  • Cooldown: <code>{COOLDOWN_SECONDS}s</code>\n"
+        f"  • Premium Price: <code>₹{PREMIUM_PRICE}</code>\n"
+        f"  • Premium Duration: <code>{PREMIUM_DURATION_DAYS} days</code>\n\n"
+        f"<b>🔌 Bot Status:</b>\n"
+        f"  • Maintenance Mode: <code>{'✅ ON' if MAINTENANCE_MODE else '❌ OFF'}</code>\n"
+        f"  • Server Time: <code>{now()}</code>"
+    )
+    
+    bot.send_message(message.chat.id, text)
+
+@bot.message_handler(commands=["responsetest"])
+def responsetest_cmd(message):
+    """Bot response test - Admin only"""
+    uid = message.from_user.id
+    if not is_admin(uid):
+        bot.reply_to(message, "❌ <b>Unauthorized!</b>")
+        return
+    
+    tests_passed = 0
+    total_tests = 5
+    results = []
+    
+    # Test 1: Database connection
+    try:
+        start = time.time()
+        with lock:
+            c = cur()
+            c.execute("SELECT COUNT(*) FROM users")
+            c.fetchone()
+        db_time = (time.time() - start) * 1000
+        results.append(f"✅ Database: <code>{db_time:.2f} ms</code>")
+        tests_passed += 1
+    except Exception as e:
+        results.append(f"❌ Database: <code>{str(e)[:30]}</code>")
+    
+    # Test 2: API endpoint
+    try:
+        start = time.time()
+        session.get(API_ENDPOINT + "test", timeout=5)
+        api_time = (time.time() - start) * 1000
+        results.append(f"✅ API Endpoint: <code>{api_time:.2f} ms</code>")
+        tests_passed += 1
+    except:
+        results.append("⚠️ API Endpoint: <code>Timeout/Error</code>")
+    
+    # Test 3: Memory usage
+    try:
+        memory = psutil.virtual_memory()
+        results.append(f"✅ Memory Check: <code>{memory.percent}% used</code>")
+        tests_passed += 1
+    except Exception as e:
+        results.append(f"❌ Memory Check: <code>{str(e)[:30]}</code>")
+    
+    # Test 4: Disk space
+    try:
+        disk = psutil.disk_usage('/')
+        results.append(f"✅ Disk Space: <code>{disk.percent}% used</code>")
+        tests_passed += 1
+    except Exception as e:
+        results.append(f"❌ Disk Space: <code>{str(e)[:30]}</code>")
+    
+    # Test 5: Bot response time
+    try:
+        start = time.time()
+        bot.send_chat_action(message.chat.id, 'typing')
+        bot_time = (time.time() - start) * 1000
+        results.append(f"✅ Bot Response: <code>{bot_time:.2f} ms</code>")
+        tests_passed += 1
+    except Exception as e:
+        results.append(f"❌ Bot Response: <code>{str(e)[:30]}</code>")
+    
+    status_emoji = "✅" if tests_passed == total_tests else ("⚠️" if tests_passed >= 3 else "❌")
+    
+    text = (
+        f"🧪 <b>Bot Response Test</b>\n\n"
+        f"{status_emoji} <b>Results: {tests_passed}/{total_tests} passed</b>\n\n"
+        + "\n".join(results) + "\n\n"
+        f"⏰ <b>Test completed at:</b> <code>{now()}</code>"
+    )
+    
+    bot.send_message(message.chat.id, text)
+
+
 # ================= CALLBACK HANDLERS =================
+
 @bot.callback_query_handler(func=lambda c: True)
 def callback_handler(call):
     """Handle all callbacks"""
@@ -2088,7 +2285,15 @@ def callback_handler(call):
     data = call.data
     
     try:
-        bot.answer_callback_query(call.id)
+        # Answer callback query immediately to prevent timeout
+        try:
+            bot.answer_callback_query(call.id)
+        except Exception as e:
+            # Query is too old or invalid, skip it
+            if "query is too old" in str(e).lower() or "response timeout" in str(e).lower():
+                print(f"⚠️ Old callback query ignored: {e}")
+                return
+            raise  # Re-raise if it's a different error
         
         if not user_exists(uid) and not data.startswith("admin_"):
             bot.send_message(call.message.chat.id, "❌ Please use /start first!")
