@@ -15,7 +15,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify
-from cashfree_pg.api_client import APIClient
+from cashfree_pg.api_client import ApiClient
 from cashfree_pg.api.payments_api import PaymentsApi
 from cashfree_pg.models.create_payment_link_request import CreatePaymentLinkRequest
 from cashfree_pg.models.customer_details import CustomerDetails
