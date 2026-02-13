@@ -19,7 +19,7 @@ from functools import wraps
 # ================= CONFIG =================
 BOT_TOKEN = "8398424570:AAHeu0z61ADO-g412e20zmnwCDt5y4cGqbc"
 SUPER_ADMIN_ID = 1618246574  # The bot owner who can add/remove other admins
-API_ENDPOINT = "https://wadownloader.amitdas.site/api/?url="
+API_ENDPOINT = "https://tera.iqbalalam8675.workers.dev/?url="
 
 DAILY_FREE_CREDITS = 5
 REFERRAL_BONUS = 2
