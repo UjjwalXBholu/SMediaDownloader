@@ -17,8 +17,8 @@ from datetime import datetime, timezone, timedelta
 from functools import wraps
 
 # ================= CONFIG =================
-BOT_TOKEN = "7826896426:AAEirZuz8SYakBLKKCUUCNEOZvVX5oaFL4o"
-SUPER_ADMIN_ID = 5798029484  # The bot owner who can add/remove other admins
+BOT_TOKEN = "8398424570:AAHeu0z61ADO-g412e20zmnwCDt5y4cGqbc"
+SUPER_ADMIN_ID = 1618246574  # The bot owner who can add/remove other admins
 API_ENDPOINT = "https://wadownloader.amitdas.site/api/?url="
 
 DAILY_FREE_CREDITS = 5
