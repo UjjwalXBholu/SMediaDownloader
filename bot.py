@@ -26,7 +26,7 @@ REFERRAL_BONUS = 2
 COOLDOWN_SECONDS = 20
 
 # UPI Payment Config
-UPI_ID = "m2h@ptaxis"
+UPI_ID = "ujjawal8989@ptaxis"
 UPI_NAME = "SMedia Downloader"
 
 # Credit Plans
